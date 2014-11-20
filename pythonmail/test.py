@@ -5,15 +5,22 @@ import smtplib
 import email
 from email.mime.text import MIMEText
 from email.header import Header
+from email.utils import getaddresses
+
+
 
 import os
 import re
 import datetime
+import logging
 import imaplib
 import ConfigParser
 from imapclient import imap_utf7
 
 from pprint import pprint
+
+logging.basicConfig(level=logging.DEBUG,
+        format='%(asctime)s %(name)s %(levelname)s %(message)s')
 
 #参考：https://docs.python.org/2/library/imaplib.html
 
@@ -22,11 +29,22 @@ receiver = 'mouselinux@163.com'
 
 class MailImap163():
     def __init__(self, host, username, password):
+        self.log = logging.getLogger("MailImap163")
         self.host = host
         self.username = username
         self.password = password
         self.con = imaplib.IMAP4(self.host)
         self.auto_index = 0 #用于重命名含有非法字符的附件
+    
+    def login(self):
+        self.con.login(self.username, self.password)
+        self.con.select()
+        self.log.debug('Login done.')
+
+    def logout(self):
+        self.con.close()
+        self.con.logout()
+        self.log.debug('Logout done.')
 
     def list_mailbox(self):
         self.con.login(self.username, self.password)
@@ -53,48 +71,44 @@ class MailImap163():
 
 
     def parse_mail(self, index):
+        """解析整个邮件内容"""
         mail = {}
         resp, data = self.con.fetch(index, "(RFC822)")
         if resp == 'OK':
             text = data[0][1]
             msg = email.message_from_string(text)
             """
-            msgkeys: ['Received', 'Content-Type', 'MIME-Version',
+            msg.key(): ['Received', 'Content-Type', 'MIME-Version',
                 'Content-Transfer-Encoding', 'Subject', 'X-CM-TRANSID',
                 'Message-Id', 'X-Coremail-Antispam', 'X-Originating-IP',
                 'Date', 'From', 'X-CM-SenderInfo']
             """
             mail['subject'] = self.parse_header(msg.get('Subject'))
-            mail['from'] = msg.get('From')
+            #From info
+            name, addr = email.utils.parseaddr(msg.get('From'))
+            mail['from_name'] = self.parse_header(name)
+            mail['from_addr'] = addr
             mail['date'] = msg.get('Date')
             mail['content'] = self.parse_msg(msg)
-
-        """
-        for i in items[0].split():
-            resp, mailData = self.con.fetch(i, "(RFC822)")    ##读取邮件信息
-            mailText = mailData[0][1]
-            mail_message = email.message_from_string(mailText)
-            mailContentDict = self.parse_mail(mail_message)
-            nowTime=time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(time.time()))
-            #print mail_message
-
-            print mail_message['subject']
-            print mail_message['from']
-            print mail_message['to']
-            #pprint(mailContentDict)
-            
-        time.sleep(0)
-
-        mailFile = StringIO.StringIO(mailText)
-        mailMessage = rfc822.Message(mailFile)
-        print message['from']
-        newMail = dict(mailMessage.items())
-        mailMessage.fp.read()
-        #server.store(items[i], '+FLAGS', '\\Deleted')##删除指定的一份邮件
-        """
+            """
+            self.log.debug(email.utils.parseaddr(msg.get('From')))
+            tos = msg.get_all('to', [])
+            ccs = msg.get_all('cc', [])
+            resent_tos = msg.get_all('resent-to', [])
+            resent_ccs = msg.get_all('resent-cc', [])
+            recipients_tos = getaddresses(tos)
+            self.log.debug(recipients_tos)
+            recipients_ccs = getaddresses(ccs)
+            self.log.debug(recipients_ccs)
+            recipients_resent_tos = getaddresses(resent_tos)
+            self.log.debug(recipients_resent_tos)
+            recipients_resent_ccs = getaddresses(resent_ccs)
+            self.log.debug(recipients_resent_ccs)
+            """
         return mail
 
     def parse_msg(self, msg):
+        """解析邮件的内容块"""
         mailContent = ''
         for part in msg.walk():        
             if not part.is_multipart():
@@ -123,47 +137,38 @@ class MailImap163():
         self.con.login(self.username, self.password)
         self.con.select()
         # list items on server
-        resp, items = self.con.search(None, "ALL")       #all Message.
-        #mailResp, items = self.con.search(None, "Recent")    #Message has not been read.
-        #resp, items = self.con.search(None, "Seen")      #Message has been read.
-        #resp, items = self.con.search(None, "Answered")   #Message has been answered.
-        #resp, items = self.con.search(None, "Flagged")   #Message is "flagged" for urgent/special attention.
-        #resp, items = self.con.search(None, "Deleted")   ##python无法看到已删除邮件                                                                       
-        #resp, items = self.con.search(None, "Draft")     ##python无法看到草稿箱内的邮件
+        resp, items = self.con.search(None, "ALL")
+        """
+        ALL         All Messages.
+        Recent      Message has not been read.
+        Seen        Message has been read.
+        Answered    Message has been answered.
+        Flagged     Message is "flagged" for urgent/special attention.
+        Deleted     Message has been deleted, python无法看到已删除邮件
+        Draft       Message in Draft, python无法看到草稿箱内的邮件
+        """
         if resp == 'OK':
-            mail_index = items[0].split()
-            print u"一共有%s封邮件"%len(mail_index)
+            return items[0].split()
         else:
             print u"收取邮件出错，响应代码：%s"%resp
+            return None
 
-        self.con.close()
-        self.con.logout()
-
-    
     def get_unread_mail(self):
-        self.con.login(self.username, self.password)
-        self.con.select()
+        """获得未读邮件的编号"""
         resp, items = self.con.search(None, "Recent")
         if resp == 'OK':
-            indexs = items[0].split()
-            print u"共有%s封未读邮件"%len(indexs)
-            print u"未读邮件的编号为:", indexs
-            for index in indexs:
-                mail = self.parse_mail(index)
-                #for test start
-                print 'subject:', mail['subject']
-                print 'from:', mail['from']
-                print 'date:', mail['date']
-                self.mark_as_unread(index)
-                #for test end
-
+            return items[0].split()
         else:
             print u"收取邮件出错，响应代码：%s"%resp
-        self.con.close()
-        self.con.logout()
+            return None
 
     def mark_as_unread(self, index):
-        self.con.store(index, '-FLAGS', '\SEEN')
+        """把邮件标记为未读邮件"""
+        self.con.store(index, '-FLAGS', '\\SEEN')
+
+    def mark_as_answered(self, index):
+        """把邮件标记为已回复邮件"""
+        self.con.store(index, '+FLAGS', '\\Answered')
 
 def smtp_send_mail():
 
@@ -185,15 +190,32 @@ def smtp_send_mail():
     smtp.quit()
 
 def test():
+    log = logging.getLogger("test")
     config = ConfigParser.ConfigParser()
     config.read('conf.ini')
     host = config.get('163', 'imaphost')
     username = config.get('163', 'username')
     password = config.get('163', 'password')
     my163 = MailImap163(host, username, password)
-    #my163.list_mailbox()
-    my163.get_unread_mail()
+    my163.login()
 
+    #my163.list_mailbox()
+
+    indexs = my163.get_unread_mail()
+    log.debug(u"共有%s封未读邮件", len(indexs))
+    log.debug(u"未读邮件的编号为:%s", ' '.join(indexs))
+
+    for index in indexs:
+        mail = my163.parse_mail(index)
+        log.debug("subject:%s", mail['subject'])
+        log.debug("from_name:%s", mail['from_name'])
+        log.debug("from_addr:%s", mail['from_addr'])
+        log.debug("date:%s", mail['date'])
+        my163.mark_as_unread(index)
+        my163.mark_as_answered(index)
+
+    my163.logout()
+    
 if __name__ == "__main__":
     #smtp_send_mail()
     test()
