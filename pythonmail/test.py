@@ -5,9 +5,6 @@ import smtplib
 import email
 from email.mime.text import MIMEText
 from email.header import Header
-from email.utils import getaddresses
-
-
 
 import os
 import re
@@ -22,16 +19,14 @@ logging.basicConfig(level=logging.DEBUG,
 
 #参考：https://docs.python.org/2/library/imaplib.html
 
-class Mail163():
+class MailNetease():
     def __init__(self, username, password):
-        self.log = logging.getLogger("Mail163")
-        self.imaphost = 'imap.163.com'
-        self.smtphost = 'smtp.163.com'
+        self.log = logging.getLogger("MailNetease")
         self.username = username
         self.password = password
-        self.con = imaplib.IMAP4(self.imaphost)
     
     def login(self):
+        self.con = imaplib.IMAP4(self.imaphost)
         self.con.login(self.username, self.password)
         self.con.select()
         self.log.debug('Login done.')
@@ -86,13 +81,13 @@ class Mail163():
             ccs = msg.get_all('cc', [])
             resent_tos = msg.get_all('resent-to', [])
             resent_ccs = msg.get_all('resent-cc', [])
-            recipients_tos = getaddresses(tos)
+            recipients_tos = email.utils.getaddresses(tos)
             self.log.debug(recipients_tos)
-            recipients_ccs = getaddresses(ccs)
+            recipients_ccs = email.utils.getaddresses(ccs)
             self.log.debug(recipients_ccs)
-            recipients_resent_tos = getaddresses(resent_tos)
+            recipients_resent_tos = email.utils.getaddresses(resent_tos)
             self.log.debug(recipients_resent_tos)
-            recipients_resent_ccs = getaddresses(resent_ccs)
+            recipients_resent_ccs = email.utils.getaddresses(resent_ccs)
             self.log.debug(recipients_resent_ccs)
             """
         return mail
@@ -182,7 +177,17 @@ class Mail163():
     def smtp_logout(self):
         self.smtp.quit()
 
+class Mail163(MailNetease):
+    def __init__(self, username, password):
+        MailNetease.__init__(self, username, password)
+        self.imaphost = 'imap.163.com'
+        self.smtphost = 'smtp.163.com'
 
+class Mail126(MailNetease):
+    def __init__(self, username, password):
+        MailNetease.__init__(self, username, password)
+        self.imaphost = 'imap.126.com'
+        self.smtphost = 'smtp.126.com'
 
 def test():
     log = logging.getLogger("test")
