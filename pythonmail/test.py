@@ -17,24 +17,19 @@ import imaplib
 import ConfigParser
 from imapclient import imap_utf7
 
-from pprint import pprint
-
 logging.basicConfig(level=logging.DEBUG,
         format='%(asctime)s %(name)s %(levelname)s %(message)s')
 
 #参考：https://docs.python.org/2/library/imaplib.html
 
-sender = 'mouselinux@163.com'
-receiver = 'mouselinux@163.com'
-
-class MailImap163():
-    def __init__(self, host, username, password):
-        self.log = logging.getLogger("MailImap163")
-        self.host = host
+class Mail163():
+    def __init__(self, username, password):
+        self.log = logging.getLogger("Mail163")
+        self.imaphost = 'imap.163.com'
+        self.smtphost = 'smtp.163.com'
         self.username = username
         self.password = password
-        self.con = imaplib.IMAP4(self.host)
-        self.auto_index = 0 #用于重命名含有非法字符的附件
+        self.con = imaplib.IMAP4(self.imaphost)
     
     def login(self):
         self.con.login(self.username, self.password)
@@ -47,16 +42,11 @@ class MailImap163():
         self.log.debug('Logout done.')
 
     def list_mailbox(self):
-        self.con.login(self.username, self.password)
-        try:
-            resp, data = self.con.list()
-            print 'Response code:', resp
-            print 'Response:'
-            for i in data:
-                print i
-                print imap_utf7.decode(i)
-        finally:
-            self.con.logout()
+        resp, datas = self.con.list()
+        if resp == 'OK':
+            return [imap_utf7.decode(data) for data in datas]
+        else:
+            return None
 
     def parse_header(self, header_str):
         """解码象=?gbk?Q?=CF=E0=C6=AC.rar?=这样的字符串"""
@@ -89,7 +79,7 @@ class MailImap163():
             mail['from_name'] = self.parse_header(name)
             mail['from_addr'] = addr
             mail['date'] = msg.get('Date')
-            mail['content'] = self.parse_msg(msg)
+            mail['contents'] = self.parse_msg(msg)
             """
             self.log.debug(email.utils.parseaddr(msg.get('From')))
             tos = msg.get_all('to', [])
@@ -109,15 +99,20 @@ class MailImap163():
 
     def parse_msg(self, msg):
         """解析邮件的内容块"""
-        mailContent = ''
+        contents = []
         for part in msg.walk():        
             if not part.is_multipart():
+                content = {}
                 contenttype = part.get_content_type()     
                 filename = part.get_filename()   
                 if filename:
+                    content['type'] = 'file'
                     h = Header(filename)
                     fname = self.parse_header(h)
-                    fdata = part.get_payload(decode=True) 
+                    fdata = part.get_payload(decode=True)
+                    content['filename'] = fname
+                    content['data'] = fdata
+                    """
                     try:
                         f = open(fname, 'wb')
                     except:
@@ -128,10 +123,13 @@ class MailImap163():
                         f = open(fanme, 'wb')
                     f.write(fdata)
                     f.close()
+                    """
                 else:
                     #不是附件，是文本内容
-                    mailContent =  part.get_payload(decode=True) 
-        return  mailContent
+                    content['type'] = 'notfile'
+                    content['data'] = part.get_payload(decode=True) 
+                contents.append(content)
+        return  contents
 
     def get_all_mail(self):
         self.con.login(self.username, self.password)
@@ -150,7 +148,7 @@ class MailImap163():
         if resp == 'OK':
             return items[0].split()
         else:
-            print u"收取邮件出错，响应代码：%s"%resp
+            self.log.error(u"收取邮件出错，响应代码：%s", resp)
             return None
 
     def get_unread_mail(self):
@@ -159,7 +157,7 @@ class MailImap163():
         if resp == 'OK':
             return items[0].split()
         else:
-            print u"收取邮件出错，响应代码：%s"%resp
+            self.log.error(u"收取邮件出错，响应代码：%s", resp)
             return None
 
     def mark_as_unread(self, index):
@@ -170,36 +168,35 @@ class MailImap163():
         """把邮件标记为已回复邮件"""
         self.con.store(index, '+FLAGS', '\\Answered')
 
-def smtp_send_mail():
+    def smtp_login(self):
+        self.smtp = smtplib.SMTP()
+        self.smtp.connect(self.smtphost)
+        self.smtp.login(self.username, self.password)
 
-    subject = u'python 测试邮件-纯文本'
-    msg_txt = MIMEText(u'你好','plain','utf-8')
-    msg_txt['Subject'] = Header(subject, 'utf-8')
+    def smtp_send_mail(self, sender, receiver, subject, txt):
+        text, subtype, charset = txt
+        msg_txt = MIMEText(text, subtype, charset)
+        msg_txt['Subject'] = Header(subject, 'utf-8')
+        self.smtp.sendmail(sender, receiver, msg_txt.as_string())
 
-    subject = u'python 测试邮件-HTML'
-    msg_htm = MIMEText(u'<html><h1>你好</h1></html>','html','utf-8')
-    msg_htm['Subject'] = subject
+    def smtp_logout(self):
+        self.smtp.quit()
 
-    smtp = smtplib.SMTP()
-    smtp.connect(smtpserver)
-    smtp.login(username, password)
 
-    #smtp.sendmail(sender, receiver, msg_txt.as_string())
-    smtp.sendmail(sender, receiver, msg_htm.as_string())
-
-    smtp.quit()
 
 def test():
     log = logging.getLogger("test")
     config = ConfigParser.ConfigParser()
     config.read('conf.ini')
-    host = config.get('163', 'imaphost')
     username = config.get('163', 'username')
     password = config.get('163', 'password')
-    my163 = MailImap163(host, username, password)
+    my163 = Mail163(username, password)
     my163.login()
 
-    #my163.list_mailbox()
+    mailboxs = my163.list_mailbox()
+    log.debug("邮箱盒子列表如下：")
+    for box in mailboxs:
+        log.debug(box)
 
     indexs = my163.get_unread_mail()
     log.debug(u"共有%s封未读邮件", len(indexs))
@@ -216,7 +213,20 @@ def test():
 
     my163.logout()
     
+    my163.smtp_login()
+    #test send mail
+    sender = 'mouselinux@163.com'
+    receiver = 'mouselinux@163.com'
+    #test mail plain
+    subject = u'python 测试邮件-纯文本'
+    txt = (u'你好','plain','utf-8')
+    my163.smtp_send_mail(sender, receiver, subject, txt)
+    #test mail html
+    subject = u'python 测试邮件-HTML'
+    txt = (u'<html><h1>你好</h1></html>','html','utf-8')
+    my163.smtp_send_mail(sender, receiver, subject, txt)
+    my163.smtp_logout()
+
 if __name__ == "__main__":
-    #smtp_send_mail()
     test()
 
