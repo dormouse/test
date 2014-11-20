@@ -8,7 +8,7 @@ from email.header import Header
 
 import os
 import re
-import time
+import datetime
 import imaplib
 import ConfigParser
 from imapclient import imap_utf7
@@ -25,72 +25,53 @@ class MailImap163():
         self.host = host
         self.username = username
         self.password = password
-        self.ipc = imaplib.IMAP4(self.host)
+        self.con = imaplib.IMAP4(self.host)
+        self.auto_index = 0 #用于重命名含有非法字符的附件
 
     def list_mailbox(self):
-        self.ipc.login(self.username, self.password)
+        self.con.login(self.username, self.password)
         try:
-            resp, data = self.ipc.list()
+            resp, data = self.con.list()
             print 'Response code:', resp
             print 'Response:'
             for i in data:
+                print i
                 print imap_utf7.decode(i)
         finally:
-            self.ipc.logout()
+            self.con.logout()
 
-    def parse_mail(self, msg):
-        # 循环信件中的每一个mime的数据块
-        mailContentDict = {}
-        fileList = []
-        mailContent = ''
-        for part in msg.walk():        
-            if not part.is_multipart(): # 这里要判断是否是multipart，是的话，里面的数据是无用的，至于为什么可以了解mime相关知识。
-                contenttype = part.get_content_type()     
-                filename = part.get_filename()   
-                if filename:
-                    # 下面的三行代码只是为了解码象=?gbk?Q?=CF=E0=C6=AC.rar?=这样的文件名
-                    h = email.Header.Header(filename)
-                    dh = email.Header.decode_header(h)
-                    fname = dh[0][0]
-                    encodeStr = dh[0][1]
-                    #将附件名转换为unicode
-                    fname = fname.decode(encodeStr,'ignore') 
-                    data = part.get_payload(decode=True) # 解码出附件数据，然后存储到文件中
-                    fileDict = {}
-                    fileDict["fileName"] = fname
-                    fileDict["fileContent"] = data
-                    fileList.append(fileDict)                
-                else:
-                    #不是附件，是文本内容
-                    mailContent =  part.get_payload(decode=True) # 解码出文本内容，直接输出来就可以了。            
-        
-        mailContentDict["mailContent"] = mailContent
-        mailContentDict["fileList"] = fileList 
-        return  mailContentDict
+    def parse_header(self, header_str):
+        """解码象=?gbk?Q?=CF=E0=C6=AC.rar?=这样的字符串"""
 
-    def get_unread_mail(self):
-        self.ipc.login(self.username, self.password)
-        self.ipc.select()
-        # list items on server
-        resp, items = self.ipc.search(None, "ALL")       #all Message.
-        #mailResp, items = self.ipc.search(None, "Recent")    #Message has not been read.
-        #resp, items = self.ipc.search(None, "Seen")      #Message has been read.
-        #resp, items = self.ipc.search(None, "Answered")   #Message has been answered.
-        #resp, items = self.ipc.search(None, "Flagged")   #Message is "flagged" for urgent/special attention.
-        #resp, items = self.ipc.search(None, "Deleted")   ##python无法看到已删除邮件                                                                       
-        #resp, items = self.ipc.search(None, "Draft")     ##python无法看到草稿箱内的邮件
-        if resp == 'OK':
-            mail_index = items[0].split()
-            print u"一共有%s封邮件"%len(mail_index)
+        if header_str:
+            txt, code = email.Header.decode_header(header_str)[0]
+            if code:
+                txt = txt.decode(code,'ignore')
+            return txt
         else:
-            print u"收取邮件出错，响应代码：%s"%resp
+            return None
 
-        self.ipc.close()
-        self.ipc.logout()
-            
+
+    def parse_mail(self, index):
+        mail = {}
+        resp, data = self.con.fetch(index, "(RFC822)")
+        if resp == 'OK':
+            text = data[0][1]
+            msg = email.message_from_string(text)
+            """
+            msgkeys: ['Received', 'Content-Type', 'MIME-Version',
+                'Content-Transfer-Encoding', 'Subject', 'X-CM-TRANSID',
+                'Message-Id', 'X-Coremail-Antispam', 'X-Originating-IP',
+                'Date', 'From', 'X-CM-SenderInfo']
+            """
+            mail['subject'] = self.parse_header(msg.get('Subject'))
+            mail['from'] = msg.get('From')
+            mail['date'] = msg.get('Date')
+            mail['content'] = self.parse_msg(msg)
+
         """
         for i in items[0].split():
-            resp, mailData = self.ipc.fetch(i, "(RFC822)")    ##读取邮件信息
+            resp, mailData = self.con.fetch(i, "(RFC822)")    ##读取邮件信息
             mailText = mailData[0][1]
             mail_message = email.message_from_string(mailText)
             mailContentDict = self.parse_mail(mail_message)
@@ -111,7 +92,78 @@ class MailImap163():
         mailMessage.fp.read()
         #server.store(items[i], '+FLAGS', '\\Deleted')##删除指定的一份邮件
         """
+        return mail
 
+    def parse_msg(self, msg):
+        mailContent = ''
+        for part in msg.walk():        
+            if not part.is_multipart():
+                contenttype = part.get_content_type()     
+                filename = part.get_filename()   
+                if filename:
+                    h = Header(filename)
+                    fname = self.parse_header(h)
+                    fdata = part.get_payload(decode=True) 
+                    try:
+                        f = open(fname, 'wb')
+                    except:
+                        today = datetime.date.today().strftime("Y%m%d")
+                        fname = today+ self.autoindex
+                        self.autoindex += 1
+                        #附件名有非法字符，自动换一个
+                        f = open(fanme, 'wb')
+                    f.write(fdata)
+                    f.close()
+                else:
+                    #不是附件，是文本内容
+                    mailContent =  part.get_payload(decode=True) 
+        return  mailContent
+
+    def get_all_mail(self):
+        self.con.login(self.username, self.password)
+        self.con.select()
+        # list items on server
+        resp, items = self.con.search(None, "ALL")       #all Message.
+        #mailResp, items = self.con.search(None, "Recent")    #Message has not been read.
+        #resp, items = self.con.search(None, "Seen")      #Message has been read.
+        #resp, items = self.con.search(None, "Answered")   #Message has been answered.
+        #resp, items = self.con.search(None, "Flagged")   #Message is "flagged" for urgent/special attention.
+        #resp, items = self.con.search(None, "Deleted")   ##python无法看到已删除邮件                                                                       
+        #resp, items = self.con.search(None, "Draft")     ##python无法看到草稿箱内的邮件
+        if resp == 'OK':
+            mail_index = items[0].split()
+            print u"一共有%s封邮件"%len(mail_index)
+        else:
+            print u"收取邮件出错，响应代码：%s"%resp
+
+        self.con.close()
+        self.con.logout()
+
+    
+    def get_unread_mail(self):
+        self.con.login(self.username, self.password)
+        self.con.select()
+        resp, items = self.con.search(None, "Recent")
+        if resp == 'OK':
+            indexs = items[0].split()
+            print u"共有%s封未读邮件"%len(indexs)
+            print u"未读邮件的编号为:", indexs
+            for index in indexs:
+                mail = self.parse_mail(index)
+                #for test start
+                print 'subject:', mail['subject']
+                print 'from:', mail['from']
+                print 'date:', mail['date']
+                self.mark_as_unread(index)
+                #for test end
+
+        else:
+            print u"收取邮件出错，响应代码：%s"%resp
+        self.con.close()
+        self.con.logout()
+
+    def mark_as_unread(self, index):
+        self.con.store(index, '-FLAGS', '\SEEN')
 
 def smtp_send_mail():
 
