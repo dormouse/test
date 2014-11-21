@@ -71,6 +71,7 @@ class MailNetease():
             mail['subject'] = self.parse_header(msg.get('Subject'))
             #From info
             name, addr = email.utils.parseaddr(msg.get('From'))
+            self.log.debug(msg.get('From'))
             mail['from_name'] = self.parse_header(name)
             mail['from_addr'] = addr
             mail['date'] = msg.get('Date')
@@ -127,8 +128,6 @@ class MailNetease():
         return  contents
 
     def get_all_mail(self):
-        self.con.login(self.username, self.password)
-        self.con.select()
         # list items on server
         resp, items = self.con.search(None, "ALL")
         """
@@ -174,9 +173,11 @@ class MailNetease():
 
     def smtp_send_mail(self, sender, receiver, subject, txt):
         text, subtype, charset = txt
+        to_name, to_addr = receiver
         msg_txt = MIMEText(text, subtype, charset)
         msg_txt['Subject'] = Header(subject, 'utf-8')
-        self.smtp.sendmail(sender, receiver, msg_txt.as_string())
+        msg_txt['To'] = "%s <%s>"%(Header(to_name, 'utf-8'), to_addr)
+        self.smtp.sendmail(sender, to_addr, msg_txt.as_string())
 
     def smtp_logout(self):
         self.smtp.quit()
@@ -193,7 +194,7 @@ class Mail126(MailNetease):
         self.imaphost = 'imap.126.com'
         self.smtphost = 'smtp.126.com'
 
-def test():
+def test_full():
     log = logging.getLogger("test")
     config = ConfigParser.ConfigParser()
     config.read('conf.ini')
@@ -233,6 +234,36 @@ def test():
     #test mail html
     subject = u'python 测试邮件-HTML'
     txt = (u'<html><h1>你好</h1></html>','html','utf-8')
+    my163.smtp_send_mail(sender, receiver, subject, txt)
+    my163.smtp_logout()
+
+def test():
+    log = logging.getLogger("test")
+    config = ConfigParser.ConfigParser()
+    config.read('conf.ini')
+    username = config.get('163', 'username')
+    password = config.get('163', 'password')
+    my163 = Mail163(username, password)
+    my163.login()
+    """
+    index = my163.get_all_mail()[0]
+
+    mail = my163.parse_mail(index)
+    log.debug("subject:%s", mail['subject'])
+    log.debug("from_name:%s", mail['from_name'])
+    log.debug("from_addr:%s", mail['from_addr'])
+    log.debug("date:%s", mail['date'])
+
+    my163.logout()
+    """
+    
+    my163.smtp_login()
+    #test send mail
+    sender = 'mouselinux@163.com'
+    receiver = (u'测试接收者', 'mouselinux@163.com')
+    #test mail plain
+    subject = u'python 测试邮件-纯文本'
+    txt = (u'你好','plain','utf-8')
     my163.smtp_send_mail(sender, receiver, subject, txt)
     my163.smtp_logout()
 
