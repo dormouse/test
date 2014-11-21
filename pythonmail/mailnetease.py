@@ -155,6 +155,10 @@ class MailNetease():
             self.log.error(u"收取邮件出错，响应代码：%s", resp)
             return None
 
+    def mark_as_seen(self, index):
+        """把邮件标记为未读邮件"""
+        self.con.store(index, '+FLAGS', '\\SEEN')
+
     def mark_as_unread(self, index):
         """把邮件标记为未读邮件"""
         self.con.store(index, '-FLAGS', '\\SEEN')
