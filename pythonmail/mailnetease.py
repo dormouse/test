@@ -39,12 +39,15 @@ class MailNetease():
     def list_mailbox(self):
         resp, datas = self.con.list()
         if resp == 'OK':
-            return [imap_utf7.decode(data) for data in datas]
+            return map(imap_utf7.decode, datas)
         else:
             return None
 
     def parse_header(self, header_str):
-        """解码象=?gbk?Q?=CF=E0=C6=AC.rar?=这样的字符串"""
+        """解码形如：
+            =?gbk?Q?=CF=E0=C6=AC.rar?=
+            的字符串
+        """
 
         if header_str:
             txt, code = email.Header.decode_header(header_str)[0]
@@ -71,11 +74,15 @@ class MailNetease():
             mail['subject'] = self.parse_header(msg.get('Subject'))
             #From info
             name, addr = email.utils.parseaddr(msg.get('From'))
-            self.log.debug(msg.get('From'))
             mail['from_name'] = self.parse_header(name)
             mail['from_addr'] = addr
             mail['date'] = msg.get('Date')
             mail['contents'] = self.parse_msg(msg)
+
+            self.log.debug("From:%s <%s>",
+                    mail['from_name'], mail['from_addr'])
+            self.log.debug('Message-Id:')
+            self.log.debug(msg.get('Message-Id:'))
             """
             self.log.debug(email.utils.parseaddr(msg.get('From')))
             tos = msg.get_all('to', [])
@@ -96,35 +103,22 @@ class MailNetease():
     def parse_msg(self, msg):
         """解析邮件的内容块"""
         contents = []
-        for part in msg.walk():        
-            if not part.is_multipart():
-                content = {}
-                contenttype = part.get_content_type()     
-                filename = part.get_filename()   
-                if filename:
-                    content['type'] = 'file'
-                    h = Header(filename)
-                    fname = self.parse_header(h)
-                    fdata = part.get_payload(decode=True)
-                    content['filename'] = fname
-                    content['data'] = fdata
-                    """
-                    try:
-                        f = open(fname, 'wb')
-                    except:
-                        today = datetime.date.today().strftime("Y%m%d")
-                        fname = today+ self.autoindex
-                        self.autoindex += 1
-                        #附件名有非法字符，自动换一个
-                        f = open(fanme, 'wb')
-                    f.write(fdata)
-                    f.close()
-                    """
-                else:
-                    #不是附件，是文本内容
-                    content['type'] = 'notfile'
-                    content['data'] = part.get_payload(decode=True) 
-                contents.append(content)
+        parts = [part for part in msg.walk() if not part.is_multipart()]
+        for part in parts:
+            content = {}
+            contenttype = part.get_content_type()     
+            self.log.debug("type:%s"%contenttype)
+            filename = part.get_filename()   
+            if filename:
+                content['type'] = 'file'
+                content['filename'] = self.parse_header(Header(filename))
+                self.log.debug("filename:%s"%content['filename'])
+            else:
+                #不是附件，是文本内容
+                content['type'] = 'notfile'
+            content['data'] = part.get_payload(decode=True) 
+            self.log.debug(content['type'])
+            contents.append(content)
         return  contents
 
     def get_all_mail(self):
@@ -245,18 +239,37 @@ def test():
     password = config.get('163', 'password')
     my163 = Mail163(username, password)
     my163.login()
-    """
     index = my163.get_all_mail()[0]
-
     mail = my163.parse_mail(index)
     log.debug("subject:%s", mail['subject'])
     log.debug("from_name:%s", mail['from_name'])
     log.debug("from_addr:%s", mail['from_addr'])
     log.debug("date:%s", mail['date'])
-
     my163.logout()
-    """
-    
+
+def test_list_mailboxs():
+    log = logging.getLogger("test_list_mailboxs")
+    config = ConfigParser.ConfigParser()
+    config.read('conf.ini')
+    username = config.get('163', 'username')
+    password = config.get('163', 'password')
+    my163 = Mail163(username, password)
+    my163.login()
+    mailboxs = my163.list_mailbox()
+    log.debug("邮箱盒子列表如下：")
+    map(log.debug, mailboxs)
+    my163.logout()
+   
+def test_send_mail():
+    log = logging.getLogger("test_send_mail")
+    config = ConfigParser.ConfigParser()
+    config.read('conf.ini')
+    username = config.get('163', 'username')
+    password = config.get('163', 'password')
+    my163 = Mail163(username, password)
+    my163.login()
+    my163.logout()
+
     my163.smtp_login()
     #test send mail
     sender = 'mouselinux@163.com'
@@ -269,4 +282,5 @@ def test():
 
 if __name__ == "__main__":
     test()
+    #test_list_mailboxs()
 
