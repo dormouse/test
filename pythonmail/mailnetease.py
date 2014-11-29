@@ -28,7 +28,8 @@ class MailNetease():
     def login(self):
         self.con = imaplib.IMAP4(self.imaphost)
         self.con.login(self.username, self.password)
-        self.con.select()
+        resp, msgs = self.con.select()
+        self.log.debug('RESP:%s, msgs:%s', resp, msgs)
         self.log.debug('Login done.')
 
     def logout(self):
@@ -188,48 +189,13 @@ class Mail126(MailNetease):
         self.imaphost = 'imap.126.com'
         self.smtphost = 'smtp.126.com'
 
-def test_full():
-    log = logging.getLogger("test")
-    config = ConfigParser.ConfigParser()
-    config.read('conf.ini')
-    username = config.get('163', 'username')
-    password = config.get('163', 'password')
-    my163 = Mail163(username, password)
-    my163.login()
+class MailSina(MailNetease):
+    def __init__(self, username, password):
+        MailNetease.__init__(self, username, password)
+        self.imaphost = 'imap.sina.com'
+        self.smtphost = 'smtp.sina.com'
 
-    mailboxs = my163.list_mailbox()
-    log.debug("邮箱盒子列表如下：")
-    for box in mailboxs:
-        log.debug(box)
 
-    indexs = my163.get_unread_mail()
-    log.debug(u"共有%s封未读邮件", len(indexs))
-    log.debug(u"未读邮件的编号为:%s", ' '.join(indexs))
-
-    for index in indexs:
-        mail = my163.parse_mail(index)
-        log.debug("subject:%s", mail['subject'])
-        log.debug("from_name:%s", mail['from_name'])
-        log.debug("from_addr:%s", mail['from_addr'])
-        log.debug("date:%s", mail['date'])
-        my163.mark_as_unread(index)
-        my163.mark_as_answered(index)
-
-    my163.logout()
-    
-    my163.smtp_login()
-    #test send mail
-    sender = 'mouselinux@163.com'
-    receiver = 'mouselinux@163.com'
-    #test mail plain
-    subject = u'python 测试邮件-纯文本'
-    txt = (u'你好','plain','utf-8')
-    my163.smtp_send_mail(sender, receiver, subject, txt)
-    #test mail html
-    subject = u'python 测试邮件-HTML'
-    txt = (u'<html><h1>你好</h1></html>','html','utf-8')
-    my163.smtp_send_mail(sender, receiver, subject, txt)
-    my163.smtp_logout()
 
 def test():
     log = logging.getLogger("test")

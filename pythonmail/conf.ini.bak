@@ -1,5 +1,12 @@
 [163]
-imaphost=imap.163.com
-smtphost=smtp.163.com
 username=
 password=
+
+[126]
+username=
+password=
+
+[sina]
+username=
+password=
+
