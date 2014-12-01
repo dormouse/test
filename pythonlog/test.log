@@ -1,0 +1,35 @@
+endlesscode  Fri, 21 Nov 2014 10:59:56 ERROR    error 1
+endlesscode  Fri, 21 Nov 2014 10:59:56 ERROR    error 2
+endlesscode  Fri, 21 Nov 2014 11:00:10 ERROR    error 1
+endlesscode  Fri, 21 Nov 2014 11:00:10 ERROR    error 2
+endlesscode  Fri, 21 Nov 2014 13:08:27 ERROR    error 1
+endlesscode  Fri, 21 Nov 2014 13:08:27 ERROR    error 2
+123456789 Fri, 21 Nov 2014 13:09:47 ERROR    error 1
+123456789 Fri, 21 Nov 2014 13:09:47 ERROR    error 2
+123456789    2014-November-21 13:11:34 ERROR    error 1
+123456789    2014-November-21 13:11:34 ERROR    error 2
+123456789    2014-11-21 13:12:00 ERROR    error 1
+123456789    2014-11-21 13:12:00 ERROR    error 2
+123456789    2014-11-21 13:13:19 ERROR    error 1
+123456789    2014-11-21 13:13:19 ERROR    error 2
+123456789    2014-11-26 14:09:40 test ERROR    error 1
+123456789    2014-11-26 14:09:40 test ERROR    error 2
+123456789    2014-11-26 14:12:15 test ERROR    error 1
+123456789    2014-11-26 14:12:15 test ERROR    error 2
+test_fun     2014-11-26 14:12:56 test ERROR    error 1
+test_fun     2014-11-26 14:12:56 test ERROR    error 2
+test_fun     2014-11-26 14:13:59 test ERROR    error 1
+test_fun     2014-11-26 14:13:59 test ERROR    error 2
+test_fun     2014-11-26 14:44:37 test ERROR    error 1
+test_fun     2014-11-26 14:44:37 test ERROR    error 2
+test_fun     2014-11-26 14:45:15 test ERROR    error 1
+test_fun     2014-11-26 14:45:15 test ERROR    error 2
+mlogger.test_fun 2014-11-26 14:52:54 test ERROR    error 1
+mlogger.test_fun 2014-11-26 14:52:54 test ERROR    error 2
+mlogger.TestLog 2014-11-26 14:53:46 a ERROR    testlog.a
+mlogger.test_fun 2014-11-26 14:53:46 test ERROR    error 1
+mlogger.test_fun 2014-11-26 14:53:46 test ERROR    error 2
+mlogger.TestLog 2014-11-26 14:56:34 a ERROR    testlog.a
+mlogger.TestLog 2014-11-26 14:56:34 b ERROR    testlog.b
+mlogger.test_fun 2014-11-26 14:56:34 test ERROR    error 1
+mlogger.test_fun 2014-11-26 14:56:34 test ERROR    error 2

@@ -67,7 +67,7 @@ class MailNetease():
             text = data[0][1]
             msg = email.message_from_string(text)
             """
-            msg.key(): ['Received', 'Content-Type', 'MIME-Version',
+            msg.keys(): ['Received', 'Content-Type', 'MIME-Version',
                 'Content-Transfer-Encoding', 'Subject', 'X-CM-TRANSID',
                 'Message-Id', 'X-Coremail-Antispam', 'X-Originating-IP',
                 'Date', 'From', 'X-CM-SenderInfo']
