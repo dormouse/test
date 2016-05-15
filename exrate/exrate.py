@@ -13,14 +13,12 @@ import sys
 
 DEBUG = True
 if DEBUG:
-    logging.basicConfig(level=logging.DEBUG,
-        format='%(asctime)s %(name)s %(levelname)s %(message)s')
+    level=logging.DEBUG
 else:
-    logging.basicConfig(level=logging.INFO,
-        format='%(asctime)s %(name)s %(levelname)s %(message)s')
+    level=logging.INFO
+logging.basicConfig(level=level,
+    format='%(asctime)s %(name)s %(levelname)s %(message)s')
 
-ID_TC1 = 10
-ID_TC2 = 20
 RETURN_CODE = 13
 
 class Rate():
@@ -34,6 +32,7 @@ class Rate():
                 'hkd': {'name': u'港币', 'rate': 11909},
                 'twd': {'name': u'新台币', 'rate': 49925},
                 'usd': {'name': u'美元', 'rate': 1534},
+                'gbp': {'name': u'英镑', 'rate': 1105},
         }
         self.name_en = self.curr.keys()
         self.name_zh = [self.curr[k]['name'] for k in self.name_en]
@@ -83,35 +82,32 @@ class MainFrame(wx.Frame):
         # Now create the Panel to put the other controls on.
         panel = wx.Panel(self)
 
-        # and a few controls
-        text = wx.StaticText(panel, -1, u"汇率转换")
-        text.SetFont(wx.Font(14, wx.SWISS, wx.NORMAL, wx.BOLD))
-        text.SetSize(text.GetBestSize())
+        # make controls
+        line_count = 5 # MAX five line
+        self.chs = map(self.MakeCh, range(line_count)) # all Choice contrls
+        self.tcs = map(self.MakeTc, range(line_count)) # all TextCtrls
+        self.tc_ids = map(self.GetTcId, self.tcs) # all TextCtrls Ids
+        
+        # Set default selection in choices
+        for index, ch in enumerate(self.chs):
+            ch.SetSelection(index)
 
-        self.ch1 = wx.Choice(self, -1, (100, 50), choices = self.rate.name_zh)
-        self.ch2 = wx.Choice(self, -1, (100, 50), choices = self.rate.name_zh)
-        self.tc1 = wx.TextCtrl(self, ID_TC1, "0", size=(125, -1))
-        self.tc2 = wx.TextCtrl(self, ID_TC2, "0", size=(125, -1))
+        # Bind all controls
+        for ch in self.chs:
+            self.Bind(wx.EVT_CHOICE, self.EvtChoice, ch)
 
-        self.Bind(wx.EVT_CHOICE, self.EvtChoice, self.ch1)
-        self.Bind(wx.EVT_CHOICE, self.EvtChoice, self.ch2)
-        self.Bind(wx.EVT_TEXT, self.EvtText, self.tc1)
-        self.Bind(wx.EVT_TEXT, self.EvtText, self.tc2)
-        self.tc1.Bind(wx.EVT_CHAR, self.EvtChar)
-        self.tc2.Bind(wx.EVT_CHAR, self.EvtChar)
-        self.tc1.Bind(wx.EVT_SET_FOCUS, self.OnSetFocus)
-        self.tc2.Bind(wx.EVT_SET_FOCUS, self.OnSetFocus)
+        for tc in self.tcs:
+            self.Bind(wx.EVT_TEXT, self.EvtText, tc)
+            tc.Bind(wx.EVT_CHAR, self.EvtChar)
+            tc.Bind(wx.EVT_SET_FOCUS, self.OnSetFocus)
 
         # Use a sizer to layout the controls, stacked vertically and with
         # a 10 pixel border around each
-
         gbs = self.gbs = wx.GridBagSizer(5, 5)
-        gbs.Add(text, (0,0), (1,2), wx.ALIGN_CENTER | wx.ALL, 5)
-        gbs.Add(self.ch1, (1,0))
-        gbs.Add(self.tc1, (1,1))
-        gbs.Add(self.ch2, (2,0))
-        gbs.Add(self.tc2, (2,1))
-
+        for index, ch in enumerate(self.chs):
+            gbs.Add(ch, (index,0))
+        for index, tc in enumerate(self.tcs):
+            gbs.Add(tc, (index,1))
         panel.SetSizer(gbs)
         panel.Layout()
 
@@ -121,6 +117,16 @@ class MainFrame(wx.Frame):
         sizer.Add(panel, 1, wx.EXPAND, 5)
         self.SetSizer(sizer)
         
+    def GetTcId(self, tc):
+        return tc.GetId()
+
+    def MakeCh(self, index):
+        ch = wx.Choice(self, wx.NewId(), (100, 50), choices=self.rate.name_zh)
+        return ch
+
+    def MakeTc(self, index):
+        tc = wx.TextCtrl(self, wx.NewId(), "0", size=(125, -1))
+        return tc
 
     def EvtChoice(self, event):
         self.log.debug('EvtChoice: %s\n' % event.GetString())
@@ -141,35 +147,21 @@ class MainFrame(wx.Frame):
 
     def calc(self):
         self.log.debug("start calc")
-        self.log.debug("current ctrlid:")
-        self.log.debug(self.ctrl_id)
+        self.log.debug("current ctrlid:%s", self.ctrl_id)
 
-        index = self.ch1.GetCurrentSelection()
-        name_zh1 = self.rate.GetNameZh(index)
-        rate1 = self.rate.GetRate(index)
-        self.log.debug(u"ch1:%s，汇率：%s", name_zh1, rate1)
+        # get base textctrl index and base rate
+        base_index = self.tc_ids.index(self.ctrl_id)
+        base_value = float(self.tcs[base_index].GetValue())
+        base_rate = self.rate.GetRate(
+                self.chs[base_index].GetCurrentSelection())
 
-        index = self.ch2.GetCurrentSelection()
-        name_zh2 = self.rate.GetNameZh(index)
-        rate2 = self.rate.GetRate(index)
-        self.log.debug(u"ch2:%s，汇率：%s", name_zh2, rate2)
-
-
-        if self.ctrl_id == ID_TC1:
-            txt = self.tc1.GetValue()
-            try:
-                twd = float(txt) * rate2 / rate1
-                self.tc2.SetValue(str(twd))
-            except Exception as e:
-                self.log.error(e)
-
-        if self.ctrl_id == ID_TC2:
-            txt = self.tc2.GetValue()
-            try:
-                rmb = float(txt) * rate1 / rate2
-                self.tc1.SetValue(str(rmb))
-            except Exception as e:
-                self.log.error(e)
+        # set other textctrl's value
+        for index, tc in enumerate(self.tcs):
+            if base_index != index:
+                target_rate = self.rate.GetRate(
+                        self.chs[index].GetCurrentSelection()) 
+                target_value = base_value * target_rate / base_rate
+                tc.SetValue(str(target_value))
 
     def OnClose(self, event):
         self.Close(True)
@@ -177,7 +169,7 @@ class MainFrame(wx.Frame):
     def OnSetFocus(self, event):
         tc_id = event.GetWindow().GetId()
         self.log.debug('OnSetFocus: %d\n' % tc_id)
-        if tc_id in [ID_TC1, ID_TC2]:
+        if tc_id in self.tc_ids:
             self.ctrl_id = tc_id
         event.Skip()
 
