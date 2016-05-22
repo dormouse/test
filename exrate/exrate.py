@@ -2,29 +2,30 @@
 # -*- coding: UTF-8 -*
 
 # 文件名: exrate.py
-# 版本: 0.1
+# 版本: 0.2
 # 用途: 货币换算
 # 创建时间: 2016/05/12
 # 修改时间: 2016/05/14
 # 作者: dormouse.young@gmail.com
 # Change log:
-#     2016/05/16 显示为两位小数
-#     2016/05/18 从中国银行网页（已经保存的本文件）读入汇率，记录当前选择
+#     0.1
+#         2016/05/16 显示为两位小数
+#         2016/05/18 从中国银行网页（已经保存的本文件）读入汇率，记录当前选择的币种
+#     0.2
+#         2016/05/22 在状态栏显示汇率发布的日期和时间，从网页读取实时数据
 
 import json
 import logging
-import os
-import sys
 import wx
 from getrate import BocRate
 
 DEBUG = True
 if DEBUG:
-    level = logging.DEBUG
+    log_level = logging.DEBUG
 else:
-    level = logging.INFO
-logging.basicConfig(level=level,
-                    format='%(asctime)s %(name)s %(levelname)s %(message)s')
+    log_level = logging.INFO
+log_format = '%(asctime)s %(name)s %(levelname)s %(message)s'
+logging.basicConfig(level=log_level, format=log_format)
 
 RETURN_CODE = 13
 
@@ -36,10 +37,12 @@ class Rate():
         # 货币缩写来源：https://zh.wikipedia.org/wiki/ISO_4217
         # 汇率来源：招商银行 http://fx.cmbchina.com/hq/
         #           中国银行 http://www.boc.cn/sourcedb/whpj/index.html
-        self.curr = BocRate().GetRate()
+        br = BocRate()
+        self.curr = br.GetRate()
         self.name_en = [item[0] for item in self.curr]
         self.name_zh = [item[1] for item in self.curr]
         self.rate = [item[2] for item in self.curr]
+        self.pub_datetime = br.GetPubDateTime()
 
     def GetNameZh(self, index):
         """ 获得中文名称 """
@@ -53,12 +56,13 @@ class Rate():
         """ 获得汇率 """
         return self.rate[index]
 
+    def GetPubDateTime(self):
+        """ 获得发布时间 """
+        return self.pub_datetime.strftime("%Y-%m-%d %H:%M:%S")
+
 
 class MainFrame(wx.Frame):
-    """
-    This is MyFrame.  It just shows a few controls on a wxPanel,
-    and has a simple menu.
-    """
+    """Main Frame of App. """
 
     def __init__(self, parent, title):
         wx.Frame.__init__(self, parent, -1, title,
@@ -87,6 +91,7 @@ class MainFrame(wx.Frame):
         self.SetMenuBar(menuBar)
 
         self.CreateStatusBar()
+        self.SetStatusText(u"汇率发布时间：%s" % self.rate.GetPubDateTime())
 
         # Now create the Panel to put the other controls on.
         panel = wx.Panel(self)
@@ -120,7 +125,10 @@ class MainFrame(wx.Frame):
             gbs.Add(ch, (index, 0))
         for index, tc in enumerate(self.tcs):
             gbs.Add(tc, (index, 1))
-        panel.SetSizer(gbs)
+
+        border = wx.BoxSizer()
+        border.Add(gbs, 1, wx.EXPAND | wx.ALL, 25)
+        panel.SetSizer(border)
         panel.Layout()
 
         # And also use a sizer to manage the size of the panel such

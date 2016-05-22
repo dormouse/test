@@ -2,14 +2,26 @@
 # -*- coding: UTF-8 -*
 
 # 文件名: getrate.py
-# 版本: 0.1
+# 版本: 0.2
 # 用途: 分析中国银行网页，得到汇率
 # 创建时间: 2016/05/16
-# 修改时间: 2016/05/16
+# 修改时间: 2016/05/22
 # 作者: dormouse.young@gmail.com
 # Change log:
+#     2016/05/22 从网页获得汇率和发布日期时间
 
+import datetime
+import logging
+import urllib
 from bs4 import BeautifulSoup
+
+DEBUG = False
+if DEBUG:
+    log_level = logging.DEBUG
+else:
+    log_level = logging.INFO
+log_format = '%(asctime)s %(name)s %(levelname)s %(message)s'
+logging.basicConfig(level=log_level, format=log_format)
 
 
 class BocRate(object):
@@ -44,12 +56,19 @@ class BocRate(object):
 
     def __init__(self):
         super(BocRate, self).__init__()
+        self.log = logging.getLogger("Boc Rate")
         self.name_zh_dict = {key: value for value, key in self.cur_code}
         self.name_en_dict = {key: value for key, value in self.cur_code}
-        url = 'http://www.boc.cn/sourcedb/whpj/index.html'
-        local_file = 'boc.htm'
-        with open(local_file) as f:
-            self.soup = BeautifulSoup(f.read(), "html.parser")
+        if DEBUG:
+            local_file = 'boc.htm'
+            with open(local_file) as f:
+                self.soup = BeautifulSoup(f.read(), "html.parser")
+        else:
+            boc_url = 'http://www.boc.cn/sourcedb/whpj/index.html'
+            sock = urllib.urlopen(boc_url)
+            html_source = sock.read()
+            sock.close()
+            self.soup = BeautifulSoup(html_source, "html.parser")
 
     def GetCols(self, row):
         cols = row.find_all('td')
@@ -63,6 +82,16 @@ class BocRate(object):
         rows = table.find_all('tr')
         rates = [(u'RMB', u'人民币', 100), ] + map(self.GetCols, rows[1:])
         return rates
+
+    def GetPubDateTime(self):
+        table = self.soup.find_all('table')[1]
+        rows = table.find_all('tr')
+        cols = rows[1].find_all('td')
+        pub_date = cols[6].string
+        year, month, day = map(int, pub_date.split('-'))
+        pub_time = cols[7].string
+        hour, minute, second = map(int, pub_time.split(':'))
+        return datetime.datetime(year, month, day, hour, minute, second)
 
 
 class Iso4217(object):
@@ -95,9 +124,12 @@ def test_Iso4217():
 
 
 def test_BocRate():
-    rates = BocRate().GetRate()
+    br = BocRate()
+    rates = br.GetRate()
     for name_en, name_zh, rate in rates:
         print name_en, name_zh, rate
+    pub_dateitme = br.GetPubDateTime()
+    print pub_dateitme.strftime("%Y-%m-%d %H:%M:%S")
 
 if __name__ == "__main__":
     test_BocRate()
